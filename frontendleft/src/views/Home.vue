@@ -212,9 +212,8 @@ export default {
 </script>
 
 <style scoped lang="scss">
-
 #home {
-  height: 100%;
+  height: 100vh; /* 设置高度为视口高度 */
   width: 100%;
 
   .el-aside {
@@ -242,7 +241,6 @@ export default {
 
   .el-header {
     background-color: #FFFFFF;
-    //background-color: pink;
     width: 100%;
     display: flex;
     align-items: center;
@@ -277,9 +275,6 @@ export default {
     box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
     min-height: 500px;
     padding: 10px;
-
   }
 }
-
-
 </style>

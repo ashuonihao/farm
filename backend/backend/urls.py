@@ -23,6 +23,7 @@ from app.views import *
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
     path('api/test/', TestView.as_view(),name='test'),  #  测试
     # ================================================= #
     # ****************** 数据入库和处理   ******************* #

@@ -3,7 +3,8 @@ import warnings
 
 import pandas as pd
 from django.db.models import Count
-
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseRedirect
 warnings.filterwarnings("ignore")
 #  可视化
 # 机器学习
@@ -112,6 +113,7 @@ def login(request):
         return JsonResponse({'code': 200, 'msg': '操作成功', "data": data})
     else:
         return JsonResponse({'code': 201, 'msg': '失败'})
+
 
 def register(request):
     postBody = request.body  # 实质上是个字符串
