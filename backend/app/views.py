@@ -1,5 +1,6 @@
 # 导入库
 import warnings
+import os
 
 import pandas as pd
 from django.db.models import Count
@@ -19,6 +20,9 @@ from app.models import *
 # logger = logging.getLogger('mylogger')
 # logger.info("post request body 请求数据提交")
 
+import os
+os.environ["LOKY_MAX_CPU_COUNT"] = "4"  # 限制最大并行进程数
+os.environ["JOBLIB_START_METHOD"] = "spawn"  # 设置进程启动方式
 
 def init_user():
     # 初始化普通用户
@@ -200,7 +204,7 @@ def sql2sql(request):
             'sdxh': sdxh,
             'mb': mb,
             'sdgs': sdgs,
-            'recordDate': '2024-02-27'
+            'recordDate': '2025-03-29'
 
         }
         # 如果不存在数据，新增
@@ -377,71 +381,55 @@ def get_sheng_productList(request):
 
 
 def get_plot1(request):
-    # 获取uid
-    uid = request.headers['Authorization']
-    uid = int(uid)
-    # 获取get数据
-    print(request.GET)
-    kind = request.GET.get('kind')
-    p1 = request.GET.get('p1')
-    p2 = request.GET.get('p2')
+    try:
+        uid = request.headers['Authorization']
+        uid = int(uid)
+        kind = request.GET.get('kind')
+        p1 = request.GET.get('p1')
+        p2 = request.GET.get('p2')
 
-    raw_data = Products.objects.filter(productPlace__contains=kind)
-    legend = [p1, p2]
-    x_data = sorted(list(set([i.recordDate for i in raw_data])))
-    x_data = [datetime.datetime.strftime(i, '%Y-%m-%d') for i in x_data]
+        raw_data = Products.objects.filter(productPlace__contains=kind)
 
-    # 最高价格
-    series1 = []
-    for legen in legend:
-        one = {
-            'name': legen,
-            'data': [],
-            'type': 'line'
-        }
-        data = []
-        for date in x_data:
-            tmp = raw_data.filter(productName=legen, recordDate=date)
-            data.append(None if tmp.count() == 0 else tmp[0].priceMax)
-        one['data'] = data
-        series1.append(one)
-    # 最低价格
-    series2 = []
-    for legen in legend:
-        one = {
-            'name': legen,
-            'data': [],
-            'type': 'line'
-        }
-        data = []
-        for date in x_data:
-            tmp = raw_data.filter(productName=legen, recordDate=date)
-            data.append(None if tmp.count() == 0 else tmp[0].priceMin)
-        one['data'] = data
-        series2.append(one)
-    # 平均价格
-    series3 = []
-    for legen in legend:
-        one = {
-            'name': legen,
-            'data': [],
-            'type': 'line'
-        }
-        data = []
-        for date in x_data:
-            tmp = raw_data.filter(productName=legen, recordDate=date)
-            data.append(None if tmp.count() == 0 else tmp[0].priceAvg)
-        one['data'] = data
-        series3.append(one)
+        # 生成唯一且排序的日期序列（格式：YYYY-MM-DD）
+        date_set = sorted({
+            i.recordDate.strftime('%Y-%m-%d')
+            for i in raw_data
+        }, key=lambda x: datetime.strptime(x, '%Y-%m-%d'))
+        x_data = date_set
 
-    return JsonResponse({'code': 200, 'msg': '操作成功',
-                         "x_data": x_data,
-                         "legend": legend,
-                         "series1": series1,
-                         "series2": series2,
-                         "series3": series3,
-                         })
+        legend = [p1, p2]
 
+        def build_series(price_field):
+            series = []
+            for product in legend:
+                data = []
+                for date_str in x_data:
+                    # 按日期和产品过滤数据
+                    record = raw_data.filter(
+                        productName=product,
+                        recordDate=datetime.strptime(date_str, '%Y-%m-%d')
+                    ).first()
+                    value = getattr(record, price_field) if record else None
+                    data.append(value)
+                series.append({
+                    'name': product,
+                    'data': data,
+                    'type': 'line',
+                    'connectNulls': True  # 允许连接空值
+                })
+            return series
+
+        return JsonResponse({
+            'code': 200,
+            'x_data': x_data,
+            'legend': legend,
+            'series1': build_series('priceMax'),
+            'series2': build_series('priceMin'),
+            'series3': build_series('priceAvg')
+        })
+
+    except Exception as e:
+        return JsonResponse({'code': 500, 'msg': str(e)})
 
 def get_all_product(request):
     # 获取uid
@@ -457,72 +445,77 @@ def get_all_product(request):
                          })
 
 
+from django.http import JsonResponse
+
+
+from datetime import datetime
+import pandas as pd
+from django.db.models import Q
+from django.http import JsonResponse
+
+
 def get_plot2(request):
-    # 获取uid
-    uid = request.headers['Authorization']
-    uid = int(uid)
-    # 获取get数据
-    print(request.GET)
-    p1 = request.GET.get('p1')
-    p2 = request.GET.get('p2')
+    try:
+        p1 = request.GET.get('p1', '').strip()
+        p2 = request.GET.get('p2', '').strip()
+        if not p1 or not p2:
+            return JsonResponse({'code': 400, 'msg': '需要两个有效产品参数'})
 
-    raw_data = Products.objects.all()
-    legend = [p1, p2]
-    x_data = sorted(list(set([i.recordDate for i in raw_data])))
-    x_data = [datetime.datetime.strftime(i, '%Y-%m-%d') for i in x_data]
+        # 修复点：补全Q查询的闭合括号
+        queryset = Products.objects.filter(
+            Q(productName=p1) | Q(productName=p2)  # 补全括号
+        )
 
-    # 最高价格
-    series1 = []
-    for legen in legend:
-        one = {
-            'name': legen,
-            'data': [],
-            'type': 'line'
-        }
-        data = []
-        for date in x_data:
-            tmp = raw_data.filter(productName=legen, recordDate=date)
-            data.append(None if tmp.count() == 0 else tmp[0].priceMax)
-        one['data'] = data
-        series1.append(one)
-    # 最低价格
-    series2 = []
-    for legen in legend:
-        one = {
-            'name': legen,
-            'data': [],
-            'type': 'line'
-        }
-        data = []
-        for date in x_data:
-            tmp = raw_data.filter(productName=legen, recordDate=date)
-            data.append(None if tmp.count() == 0 else tmp[0].priceMin)
-        one['data'] = data
-        series2.append(one)
-    # 平均价格
-    series3 = []
-    for legen in legend:
-        one = {
-            'name': legen,
-            'data': [],
-            'type': 'line'
-        }
-        data = []
-        for date in x_data:
-            tmp = raw_data.filter(productName=legen, recordDate=date)
-            data.append(None if tmp.count() == 0 else tmp[0].priceAvg)
-        one['data'] = data
-        series3.append(one)
+        if not queryset.exists():
+            return JsonResponse({'code': 404, 'msg': '无相关数据'})
 
-    return JsonResponse({'code': 200, 'msg': '操作成功',
-                         "x_data": x_data,
-                         "legend": legend,
-                         "series1": series1,
-                         "series2": series2,
-                         "series3": series3,
-                         })
+        # 以下代码可正常执行
+        df = pd.DataFrame.from_records(queryset.values(
+            'productName', 'recordDate', 'priceMax', 'priceMin', 'priceAvg'))
+        #
+        # 处理日期格式
+        df['date_str'] = df['recordDate'].apply(
+            lambda x: x.strftime('%Y-%m-%d') if isinstance(x, datetime) else str(x)
+        )
+        x_data = sorted(df['date_str'].unique(), key=lambda d: datetime.strptime(d, '%Y-%m-%d'))
 
+        # 构建日期-产品-价格的映射
+        date_product_map = {}
+        for _, row in df.iterrows():
+            key = (row['date_str'], row['productName'])
+            date_product_map[key] = row
 
+        # 生成系列数据
+        def build_series(price_field):
+            series = []
+            for product in [p1, p2]:
+                data = []
+                for date in x_data:
+                    key = (date, product)
+                    if key in date_product_map:
+                        data.append(date_product_map[key][price_field] if key in date_product_map else None)
+                    else:
+                        data.append(0)  # 填充默认值
+                series.append({
+                    'name': f'{product}({price_field})',
+                    'data': data,
+                    'type': 'line',
+                    'smooth': True
+                })
+            return series
+
+        return JsonResponse({
+            'code': 200,
+            'x_data': x_data,
+            'series': {
+                'max': build_series('priceMax'),
+                'min': build_series('priceMin'),
+                'avg': build_series('priceAvg')
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({'code': 500, 'msg': str(e)})
 def get_plot3(request):
     # 获取uid
     uid = request.headers['Authorization']
@@ -531,7 +524,7 @@ def get_plot3(request):
     print(request.GET)
     p1 = request.GET.get('p1')
 
-    pro_list = ['广东', '广西', '河南', '海南', '湖北', '湖南']
+    pro_list = ['广东', '广西', '河南', '海南', '湖北', '湖南', '辽宁']
 
     raw_data = Products.objects.filter(productName=p1)
     data = []
@@ -552,7 +545,7 @@ def get_plot4(request):
     print(request.GET)
     kind = request.GET.get('kind')
 
-    pro_list = ['广东', '广西', '河南', '海南', '湖北', '湖南']
+    pro_list = ['广东', '广西', '河南', '海南', '湖北', '湖南', '辽宁',]
 
     raw_data = Products.objects.filter(productPlace__contains=kind, categoryName='蔬菜类')
 
@@ -592,7 +585,7 @@ def get_future_date(end_time_str='2024-02-27', days=7, is_str=True):
     print(data)
     return data
 
-
+from datetime import datetime
 def product_predict(request):
     # 获取uid
     uid = request.headers['Authorization']
@@ -604,8 +597,9 @@ def product_predict(request):
 
     # 预测未来一周数据构建
     days = 7
-    future_data_str = get_future_date(end_time_str='2024-02-27', days=days, is_str=True)
-    future_data = get_future_date(end_time_str='2024-02-27', days=days, is_str=False)
+    current_date = datetime.now().strftime('%Y-%m-%d')  # 获取当前日期
+    future_data_str = get_future_date(end_time_str=current_date, days=days, is_str=True)
+    future_data = get_future_date(end_time_str=current_date, days=days, is_str=False)
     pre_data = [
         [i.year, i.month, i.day]
         for i in future_data
@@ -636,7 +630,7 @@ def product_predict(request):
     rf = RandomForestRegressor(random_state=10)
     time1 = time.time()
     param_1 = {'n_estimators': list(range(400, 1000, 100))}
-    model_1 = GridSearchCV(estimator=rf, param_grid=param_1, cv=5, n_jobs=-1)
+    model_1 = GridSearchCV(estimator=rf, param_grid=param_1, cv=5, n_jobs=1)
     model_1.fit(x_train, y_train)
     print("model1 最好的分数：{}".format(model_1.best_score_))
     print("model1 测试集的分数:{}".format(model_1.score(x_test, y_test)))
@@ -662,7 +656,7 @@ def product_predict(request):
     rf = RandomForestRegressor(random_state=10)
     time1 = time.time()
     param_1 = {'n_estimators': list(range(400, 1000, 100))}
-    model_1 = GridSearchCV(estimator=rf, param_grid=param_1, cv=5, n_jobs=-1)
+    model_1 = GridSearchCV(estimator=rf, param_grid=param_1, cv=5, n_jobs=1)
     model_1.fit(x_train, y_train)
     print("model1 最好的分数：{}".format(model_1.best_score_))
     print("model1 测试集的分数:{}".format(model_1.score(x_test, y_test)))
@@ -688,7 +682,7 @@ def product_predict(request):
     rf = RandomForestRegressor(random_state=10)
     time1 = time.time()
     param_1 = {'n_estimators': list(range(400, 1000, 100))}
-    model_1 = GridSearchCV(estimator=rf, param_grid=param_1, cv=5, n_jobs=-1)
+    model_1 = GridSearchCV(estimator=rf, param_grid=param_1, cv=5, n_jobs=1)
     model_1.fit(x_train, y_train)
     print("model1 最好的分数：{}".format(model_1.best_score_))
     print("model1 测试集的分数:{}".format(model_1.score(x_test, y_test)))
@@ -740,22 +734,22 @@ def get_plot5(request):
     raw_data = Products.objects.filter(productName=p1, productPlace__contains=kind)
 
     x_data_date = sorted(list(set([i.recordDate for i in raw_data])))
-    x_data = [datetime.datetime.strftime(i, '%Y-%m-%d') for i in x_data_date]
+    x_data = [i.strftime('%Y-%m-%d') for i in x_data_date]  # 关键修复点
     legend = ['最高价格', '最低价格', '平均价格']
 
     # 最高价格
     data1 = []
-    for date in x_data:
+    for date in x_data_date:  # 注意：此处应使用 x_data_date 而非 x_data（日期对象）
         t = raw_data.filter(recordDate=date)[0].priceMax
         data1.append(t)
     # 最低价格
     data2 = []
-    for date in x_data:
+    for date in x_data_date:
         t = raw_data.filter(recordDate=date)[0].priceMin
         data2.append(t)
     # 平均价格
     data3 = []
-    for date in x_data:
+    for date in x_data_date:
         t = raw_data.filter(recordDate=date)[0].priceAvg
         data3.append(t)
     series = [

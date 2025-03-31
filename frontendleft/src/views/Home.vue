@@ -171,7 +171,7 @@ export default {
 
         {
           "id": 3,
-          "name": "农产品价格预测",
+          "name": "农产品价格",
           "path": "",
           "icon": "el-icon-menu",
           "children": [

@@ -58,193 +58,163 @@
 </template>
 
 <script>
-import { get_all_product, get_plot2} from "@/api/api";
+import { get_all_product, get_plot2 } from "@/api/api";
 
 export default {
   name: "rice_list",
   created() {
-    this.get_data()
+    this.get_data();
   },
   data() {
     return {
       // 搜索表单
       formInline: {
-        p1: '',
-        p2: '',
+        p1: "",
+        p2: "",
       },
       // 类别数据
       data_list: [],
-    }
+    };
   },
   methods: {
-
     // 改变
     get_data() {
-      get_all_product({}).then(res => {
+      get_all_product({}).then((res) => {
         this.$message({
           type: "success",
           message: "获取数据成功",
-        })
-        this.data_list = res.data_list
+        });
+        this.data_list = res.data_list;
       });
     },
     // 提交搜索表单
     onSubmit() {
-      if (this.formInline.p1 == '' || this.formInline.p2 == '') {
+      if (this.formInline.p1 === "" || this.formInline.p2 === "") {
         this.$message({
           type: "error",
           message: "请选择两个产品",
-        })
-        return
+        });
+        return;
       }
-      if (this.formInline.p1 == this.formInline.p2) {
+      if (this.formInline.p1 === this.formInline.p2) {
         this.$message({
           type: "error",
           message: "请选择不同产品",
-        })
-        return
+        });
+        return;
       }
-      get_plot2(this.formInline).then(res => {
+      get_plot2(this.formInline).then((res) => {
         this.$message({
           type: "success",
           message: "获取数据成功",
-        })
+        });
 
-        // 数据
-        let legend = ['name1', 'name2'];
-        let x_data = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-        let series1 = [
-          {
-            'name': 'name1',
-            'data': [150, 230, 224, 218, 135, 147, 260],
-            'type': 'line'
-          },
-          {
-            'name': 'name2',
-            'data': [22, 100, 124, 118, 35, 47, 160],
-            'type': 'line'
-          }
-        ]
-        let series2 = series1
-        let series3 = series1
-
-        legend = res.legend
-        x_data = res.x_data
-        series1 = res.series1
-        series2 = res.series2
-        series3 = res.series3
-
-
-        // 指定图表的配置项和数据
-        let myChart1 = this.$echarts.init(document.getElementById("main1"));
-        let option1 = {
-          //标题
+        // 处理最高价格图表（main1）
+        const chartDom1 = document.getElementById("main1");
+        let myChart1 = this.$echarts.getInstanceByDom(chartDom1);
+        if (myChart1) {
+          myChart1.dispose();
+        }
+        myChart1 = this.$echarts.init(chartDom1);
+        const option1 = {
           title: {
-            text: '',
-            left: 'center',
-            textStyle: { //设置主标题风格
-              color: 'black',//设置主标题字体颜色
-              fontSize: '30px',
+            text: "",
+            left: "center",
+            textStyle: {
+              color: "black",
+              fontSize: "30px",
             },
           },
-          //提示
           tooltip: {
-            trigger: 'axis',
-            //trigger: 'item',
+            trigger: "axis",
           },
-          // 伸缩
-          dataZoom: [{type: 'inside'}, {type: 'slider'}],
+          dataZoom: [{ type: "inside" }, { type: "slider" }],
           xAxis: {
-            type: 'category',
-            data: x_data,
+            type: "category",
+            data: res.x_data,
           },
           yAxis: {
-            type: 'value'
+            type: "value",
           },
           legend: {
-            data: legend
+            data: res.legend,
           },
-          series: series1
+          series: res.series.max, // 假设 max 对应最高价格数据
         };
-        // 使用刚指定的配置项和数据显示图表。
         myChart1.setOption(option1);
 
-        // 指定图表的配置项和数据
-        let myChart2 = this.$echarts.init(document.getElementById("main2"));
-        let option2 = {
-          //标题
+        // 处理最低价格图表（main2）
+        const chartDom2 = document.getElementById("main2");
+        let myChart2 = this.$echarts.getInstanceByDom(chartDom2);
+        if (myChart2) {
+          myChart2.dispose();
+        }
+        myChart2 = this.$echarts.init(chartDom2);
+        const option2 = {
           title: {
-            text: '',
-            left: 'center',
-            textStyle: { //设置主标题风格
-              color: 'black',//设置主标题字体颜色
-              fontSize: '30px',
+            text: "",
+            left: "center",
+            textStyle: {
+              color: "black",
+              fontSize: "30px",
             },
           },
-          //提示
           tooltip: {
-            trigger: 'axis',
-            //trigger: 'item',
+            trigger: "axis",
           },
-          // 伸缩
-          dataZoom: [{type: 'inside'}, {type: 'slider'}],
+          dataZoom: [{ type: "inside" }, { type: "slider" }],
           xAxis: {
-            type: 'category',
-            data: x_data,
+            type: "category",
+            data: res.x_data,
           },
           yAxis: {
-            type: 'value'
+            type: "value",
           },
           legend: {
-            data: legend
+            data: res.legend,
           },
-          series: series2
+          series: res.series.min, // 假设 min 对应最低价格数据
         };
-        // 使用刚指定的配置项和数据显示图表。
         myChart2.setOption(option2);
 
-        // 指定图表的配置项和数据
-        let myChart3 = this.$echarts.init(document.getElementById("main3"));
-        let option3 = {
-          //标题
+        // 处理平均价格图表（main3）
+        const chartDom3 = document.getElementById("main3");
+        let myChart3 = this.$echarts.getInstanceByDom(chartDom3);
+        if (myChart3) {
+          myChart3.dispose();
+        }
+        myChart3 = this.$echarts.init(chartDom3);
+        const option3 = {
           title: {
-            text: '',
-            left: 'center',
-            textStyle: { //设置主标题风格
-              color: 'black',//设置主标题字体颜色
-              fontSize: '30px',
+            text: "",
+            left: "center",
+            textStyle: {
+              color: "black",
+              fontSize: "30px",
             },
           },
-          //提示
           tooltip: {
-            trigger: 'axis',
-            //trigger: 'item',
+            trigger: "axis",
           },
-          // 伸缩
-          dataZoom: [{type: 'inside'}, {type: 'slider'}],
+          dataZoom: [{ type: "inside" }, { type: "slider" }],
           xAxis: {
-            type: 'category',
-            data: x_data,
+            type: "category",
+            data: res.x_data,
           },
           yAxis: {
-            type: 'value'
+            type: "value",
           },
           legend: {
-            data: legend
+            data: res.legend,
           },
-          series: series3
+          series: res.series.avg, // 假设 avg 对应平均价格数据
         };
-        // 使用刚指定的配置项和数据显示图表。
         myChart3.setOption(option3);
       });
-
-
     },
   },
-
-}
+};
 </script>
 
 <style scoped lang="scss">
-
 </style>

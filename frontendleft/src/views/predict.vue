@@ -46,9 +46,6 @@ import {get_all_product, get_sheng_productList, product_predict} from "@/api/api
 
 export default {
   name: "rice_list",
-  created() {
-    this.get_data()
-  },
   data() {
     return {
       kind_list: ['广东', '广西', '河南', '海南', '湖北', '湖南'],
@@ -76,16 +73,23 @@ export default {
 
     // 提交搜索表单
     onSubmit() {
-      if (this.formInline.p1 == '') {
+      if (this.formInline.kind === '') {
         this.$message({
           type: "error",
-          message: "请选择个产品",
+          message: "请选择省份",
+        })
+        return
+      }
+      if (this.formInline.p1 === '') {
+        this.$message({
+          type: "error",
+          message: "请选择产品",
         })
         return
       }
       const loading = this.$loading({
         lock: true,
-        text: 'Loading',
+        text: '正在预测中...',
         spinner: 'el-icon-loading',
         background: 'rgba(0, 0, 0, 0.7)'
       });
@@ -122,31 +126,51 @@ export default {
         // 指定图表的配置项和数据
         let myChart = this.$echarts.init(document.getElementById("main"));
         let option = {
-          //标题
           title: {
-            text: '',
+            text: `${this.formInline.kind}-${this.formInline.p1}未来7天价格预测`,
             left: 'center',
-            textStyle: { //设置主标题风格
-              color: 'black',//设置主标题字体颜色
-              fontSize: '30px',
+            textStyle: {
+              color: 'black',
+              fontSize: '20px',
             },
           },
-          //提示
           tooltip: {
             trigger: 'axis',
-            //trigger: 'item',
+            formatter: function(params) {
+              let result = params[0].name + '<br/>';
+              params.forEach(item => {
+                result += item.seriesName + ': ' + item.value + '元/kg<br/>';
+              });
+              return result;
+            }
           },
-          // 伸缩
-          dataZoom: [{type: 'inside'}, {type: 'slider'}],
+          dataZoom: [
+            {
+              type: 'inside',
+              start: 0,
+              end: 100
+            }, 
+            {
+              type: 'slider',
+              start: 0,
+              end: 100
+            }
+          ],
           xAxis: {
             type: 'category',
             data: x_data,
+            name: '日期'
           },
           yAxis: {
-            type: 'value'
+            type: 'value',
+            name: '价格(元/kg)',
+            axisLabel: {
+              formatter: '{value} 元'
+            }
           },
           legend: {
-            data: legend
+            data: legend,
+            top: '30px'
           },
           series: series
         };

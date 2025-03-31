@@ -49,6 +49,9 @@ export default {
   created() {
     this.get_data()
   },
+  mounted() {
+    this.get_data()
+  },
   data() {
     return {
       kind_list: ['广东', '广西', '河南', '海南', '湖北', '湖南'],
